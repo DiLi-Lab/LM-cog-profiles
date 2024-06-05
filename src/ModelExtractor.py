@@ -1,11 +1,9 @@
 from transformers import GPT2LMHeadModel, GPT2TokenizerFast
-from transformers import T5TokenizerFast, T5ForConditionalGeneration
 from transformers import AutoModelForCausalLM, AutoTokenizer
 import torch
 import numpy as np
 import pdb
 from typing import List, Tuple
-from peft import PeftModel, PeftConfig
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 TOKEN = ""
@@ -16,20 +14,8 @@ def get_model(model_name: str):
         return GPTBScorer()
     elif model_name == "gpt2-large":
         return GPTLScorer()
-    elif model_name == "gpt2-b-ft-def-klex":
-        return GPTBScorerFTKlex(optim="default")
-    elif model_name == "gpt2-b-ft-optim-klex":
-        return GPTBScorerFTKlex(optim="optim")
-    elif model_name == "gpt2-b-ft-def-wiki":
-        return GPTBScorerFTWiki(optim="default")
-    elif model_name == "gpt2-b-ft-optim-wiki":
-        return GPTBScorerFTWiki(optim="optim")
     elif model_name == "llama-7b":
         return Llama7Scorer()
-    elif model_name == "llama-7b_finetuned_wiki":
-        return Llama7ScorerFTWiki()
-    elif model_name == "llama-7b_finetuned_kids":
-        return Llama7ScorerFTKids()
     elif model_name == "llama-13b":
         return Llama13Scorer()
     elif model_name == "mixtral":
@@ -38,8 +24,7 @@ def get_model(model_name: str):
         raise ValueError(f"Model {model_name} not supported.")
 
 class LMScorerBase:
-    def __init__(self, optim: str = ""):
-        self.optim = optim
+    def __init__(self):
         self.model = self.load_model()
         self.tokenizer = self.get_tokenizer()
         self.BOS = self.check_if_BOS()
@@ -187,36 +172,6 @@ class GPTLScorer(LMScorerBase):
         return GPT2TokenizerFast.from_pretrained("benjamin/gerpt2-large")
 
 
-class GPTBScorerFTKlex(LMScorerBase):
-    def __init__(self, optim: str):
-        super().__init__(optim)
-        self.name = f"gpt2-base-finetuned-{self.optim}-klexicon"
-
-    def load_model(self):
-        model = GPT2LMHeadModel.from_pretrained(f"/srv/scratch1/bolliger_haller/population-biases/finetuning/gerpt2/{self.optim}_params/klexikon_sentences")
-        model.to(device)
-        model.eval()
-        return model
-
-    def get_tokenizer(self):
-        return GPT2TokenizerFast.from_pretrained("benjamin/gerpt2")
-
-
-class GPTBScorerFTWiki(LMScorerBase):
-    def __init__(self, optim: str):
-        super().__init__(optim)
-        self.name = f"gpt2-base-finetuned-{self.optim}-wiki"
-        
-    def load_model(self):
-        model = GPT2LMHeadModel.from_pretrained(f"/srv/scratch1/bolliger_haller/population-biases/finetuning/gerpt2/{self.optim}_params/wiki_sentences")
-        model.to(device)
-        model.eval()
-        return model
-
-    def get_tokenizer(self):
-        return GPT2TokenizerFast.from_pretrained("benjamin/gerpt2")
-
-
 class Llama7Scorer(LMScorerBase):
     def __init__(self):
         super().__init__()
@@ -236,55 +191,6 @@ class Llama7Scorer(LMScorerBase):
     def get_tokenizer(self):
         return AutoTokenizer.from_pretrained("LeoLM/leo-hessianai-7b")
     
-
-class Llama7ScorerFTWiki(LMScorerBase):
-    def __init__(self):
-        super().__init__()
-        self.name = "llama-7b_finetuned_wiki"
-
-    def load_model(self):
-        model = AutoModelForCausalLM.from_pretrained(
-            "LeoLM/leo-hessianai-7b",
-            device_map="auto",
-            torch_dtype=torch.float16,
-            load_in_4bit=True,
-            bnb_4bit_quant_type="nf4",
-            bnb_4bit_compute_dtype=torch.bfloat16
-            )
-        model = PeftModel.from_pretrained(
-            model,
-            "/srv/scratch1/bolliger_haller/population-biases/finetuning/leo-hessianai-7b/wiki_sentences/checkpoint-5500"
-        )
-        model.eval()
-        return model
-    
-    def get_tokenizer(self):
-        return AutoTokenizer.from_pretrained("LeoLM/leo-hessianai-7b")
-
-class Llama7ScorerFTKids(LMScorerBase):
-    def __init__(self):
-        super().__init__()
-        self.name = "llama-7b_finetuned_kids"
-
-    def load_model(self):
-        model = AutoModelForCausalLM.from_pretrained(
-            "LeoLM/leo-hessianai-7b",
-            device_map="auto",
-            torch_dtype=torch.float16,
-            load_in_4bit=True,
-            bnb_4bit_quant_type="nf4",
-            bnb_4bit_compute_dtype=torch.bfloat16
-            )
-        model = PeftModel.from_pretrained(
-            model,
-            "/srv/scratch1/bolliger_haller/population-biases/finetuning/leo-hessianai-7b/klexikon_sentences"
-        )
-        model.eval()
-        return model
-    
-    def get_tokenizer(self):
-        return AutoTokenizer.from_pretrained("/srv/scratch1/bolliger_haller/population-biases/finetuning/leo-hessianai-7b/klexikon_sentences")
-
     
 class Llama13Scorer(LMScorerBase):
     def __init__(self):
